@@ -1,0 +1,176 @@
+package kv
+
+import (
+	"context"
+	"encoding/binary"
+	"fmt"
+	"github.com/google/uuid"
+	"reflect"
+)
+
+type Index struct {
+	kv KV
+}
+
+func NewIndex(kv KV) *Index {
+	return &Index{kv: kv}
+}
+
+func (i *Index) Index(ctx context.Context, doc interface{}) (uuid.UUID, error) {
+
+	t := reflect.TypeOf(doc)
+	if t.Kind() != reflect.Ptr {
+		return uuid.UUID{}, fmt.Errorf("doc must be a pointer")
+	}
+
+	if t.Elem().Kind() != reflect.Struct {
+		return uuid.UUID{}, fmt.Errorf("doc must be a pointer to a struct")
+	}
+
+	v := reflect.ValueOf(doc).Elem()
+
+	w := i.kv.Write()
+
+	id := uuid.New()
+
+	var searchKey = NewKeyBuilder([]byte{'k'})
+	var accessKey = NewKeyBuilder([]byte{'a'})
+	accessKey.PushUUID(id)
+
+	var valout = func(v reflect.Value) error {
+
+		if v.Kind() == reflect.Pointer && v.IsNil() {
+
+			err := w.Set(ctx, accessKey.key.Bytes(), []byte{0})
+			if err != nil {
+				return err
+			}
+
+			if searchKey.PushNull() != nil {
+				return nil
+			}
+			defer searchKey.Pop()
+
+		} else if v.Kind() == reflect.String {
+
+			err := w.Set(ctx, accessKey.key.Bytes(), []byte(v.String()))
+			if err != nil {
+				return err
+			}
+
+			if searchKey.PushString(v.String()) != nil {
+				return nil
+			}
+			defer searchKey.Pop()
+
+		} else if v.Kind() == reflect.Uint64 || v.Kind() == reflect.Uint32 || v.Kind() == reflect.Uint16 || v.Kind() == reflect.Uint8 || v.Kind() == reflect.Uint {
+
+			var enc [8]byte
+			binary.BigEndian.PutUint64(enc[:], v.Uint())
+			err := w.Set(ctx, accessKey.key.Bytes(), enc[:])
+			if err != nil {
+				return err
+			}
+
+			if searchKey.PushUint64(v.Uint()) != nil {
+				return nil
+			}
+			defer searchKey.Pop()
+
+		} else if v.Kind() == reflect.Int64 || v.Kind() == reflect.Int32 || v.Kind() == reflect.Int16 || v.Kind() == reflect.Int8 || v.Kind() == reflect.Int {
+
+			// TODO:
+			// signed integers are not searchable
+			// and also will read wrong
+
+			var enc [8]byte
+			binary.BigEndian.PutUint64(enc[:], uint64(v.Int()))
+			err := w.Set(ctx, accessKey.key.Bytes(), enc[:])
+			if err != nil {
+				return err
+			}
+
+			if searchKey.PushUint64(v.Uint()) != nil {
+				return nil
+			}
+			defer searchKey.Pop()
+		} else {
+			return fmt.Errorf("unsupported type %s", v.Kind())
+		}
+
+		if searchKey.PushUUID(id) == nil {
+			w.Set(ctx, searchKey.key.Bytes(), []byte{0})
+			searchKey.Pop()
+		}
+
+		return nil
+	}
+
+	var visit func(v reflect.Value) error
+	visit = func(v reflect.Value) error {
+		t := v.Type()
+		if t.Kind() == reflect.Ptr {
+			if v.IsNil() {
+				err := valout(v)
+				if err != nil {
+					return err
+				}
+			}
+			err := visit(v.Elem())
+			if err != nil {
+				return err
+			}
+		} else if t.Kind() == reflect.Struct {
+			for i := 0; i < t.NumField(); i++ {
+				f := t.Field(i)
+
+				searchKey.PushBytes([]byte(f.Name))
+				err := accessKey.PushBytes([]byte(f.Name))
+				if err != nil {
+					return err
+				}
+
+				err = visit(v.Field(i))
+				if err != nil {
+					return err
+				}
+
+				searchKey.Pop()
+				accessKey.Pop()
+			}
+		} else if t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
+			for i := 0; i < v.Len(); i++ {
+
+				err := accessKey.PushUint64(uint64(i))
+				if err != nil {
+					return err
+				}
+
+				err = visit(v.Index(i))
+				if err != nil {
+					return err
+				}
+
+				accessKey.Pop()
+			}
+		} else {
+			return valout(v)
+		}
+
+		return nil
+
+	}
+
+	err := visit(v)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	err = w.Commit(ctx)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+
+	return uuid.UUID{}, nil
+
+}

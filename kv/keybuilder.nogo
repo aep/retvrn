@@ -1,0 +1,74 @@
+package kv
+
+import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"github.com/google/uuid"
+)
+
+type KeyBuilder struct {
+	key   bytes.Buffer
+	stack []int
+}
+
+func NewKeyBuilder(prefix []byte) *KeyBuilder {
+	kk := &KeyBuilder{
+		key: bytes.Buffer{},
+	}
+	kk.key.Write(prefix)
+	return kk
+}
+
+func (b *KeyBuilder) PushUUID(u uuid.UUID) error {
+	return b.PushBytes(u[:])
+}
+
+func (b *KeyBuilder) PushString(bb string) error {
+	return b.PushBytes([]byte(bb))
+}
+
+func (b *KeyBuilder) PushBytes(bb []byte) error {
+	b.stack = append(b.stack, b.key.Len())
+
+	if len(bb) > 65535 {
+		return fmt.Errorf("key too large")
+	}
+	err := binary.Write(&b.key, binary.BigEndian, uint16(len(bb)))
+	if err != nil {
+		return err
+	}
+	_, err = b.key.Write(bb)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (b *KeyBuilder) PushUint64(i uint64) error {
+	b.stack = append(b.stack, b.key.Len())
+
+	err := binary.Write(&b.key, binary.BigEndian, i)
+	return err
+}
+
+func (b *KeyBuilder) PushNull() error {
+	b.stack = append(b.stack, b.key.Len())
+
+	_, err := b.key.Write([]byte{0, 0})
+	return err
+}
+
+func (b *KeyBuilder) Pop() {
+	if len(b.stack) == 0 {
+		return
+	}
+	b.key.Truncate(b.stack[len(b.stack)-1])
+	b.stack = b.stack[:len(b.stack)-1]
+}
+
+func (b *KeyBuilder) Reset() {
+	b.key.Reset()
+	b.stack = []int{}
+}
