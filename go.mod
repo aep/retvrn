@@ -1,9 +1,10 @@
-module monke
+module retvrn
 
 go 1.23
 
 require (
 	github.com/99designs/gqlgen v0.17.55
+	github.com/ettle/strcase v0.2.0
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.9.0
 	github.com/tikv/client-go/v2 v2.0.7

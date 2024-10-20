@@ -1,0 +1,47 @@
+# GraphQL schema example
+#
+# https://gqlgen.com/getting-started/
+
+type Todo {
+  id: ID!
+  text: String!
+  done: Boolean!
+  user: User!
+  Some_casing: Boolean!
+  otherCasing: Boolean!
+}
+
+type User {
+  id: ID!
+  name: String!
+}
+
+type Query {
+todos(text: String): [Todo!]!
+}
+
+input NewTodo {
+  text: String!
+  userId: String!
+}
+
+type Mutation {
+  createTodo(input: NewTodo!): Todo!
+}
+
+
+#  example data:
+#
+# User { id: 1, name: "Alice" }
+# User { id: 2, name: "Bob" }
+#
+# Todo { id: 1, text: "Do something", done: false, user_id: 1 }
+# Todo { id: 2, text: "Do something else", done: false, user_id: 2 }
+# Todo { id: 3, text: "Make me a sandwich", done: true, user_id: 2 }
+#
+# kv mapping:
+# 
+# F.todo.id.1 = 1
+# F.todo.text.1 = "Do something"
+# F.todo.done.1 = false
+# F.todo.user_id.1 = 1

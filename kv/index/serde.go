@@ -1,4 +1,4 @@
-package kv
+package index
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"reflect"
 )
 
-func serialize(v interface{}) ([]byte, error) {
+func Serialize(v interface{}) ([]byte, error) {
 
 	var b bytes.Buffer
 
@@ -22,7 +22,7 @@ func serialize(v interface{}) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func deserialize(b []byte, v interface{}) error {
+func Deserialize(b []byte, v interface{}) error {
 
 	// nil value or error?
 	if len(b) < 2 {
