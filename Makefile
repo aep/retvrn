@@ -3,7 +3,7 @@ dev: graph/generated.go
 	./retvrn
 
 
-graph/generated.go: graph/schema.graphqls
+graph/generated.go: graph/schema.graphqls gqlgen.yml
 	go run github.com/99designs/gqlgen generate
 
 

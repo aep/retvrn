@@ -6,13 +6,12 @@ package graph
 
 import (
 	"context"
+	"github.com/google/uuid"
 	"iter"
 	"retvrn/graph/model"
 	"retvrn/kv/index/auto"
 	"retvrn/kv/index/graph"
 	"retvrn/kv/index/search"
-
-	"github.com/google/uuid"
 )
 
 // CreateTodo is the resolver for the createTodo field.
@@ -24,16 +23,13 @@ func (r *mutationResolver) CreateTodo(ctx context.Context, input model.NewTodo) 
 	auto.Put(w, newID, "Todo:ID", newID.String())
 	auto.Put(w, newID, "Todo:Text", input.Text)
 
-	userID, err := uuid.Parse(input.UserID)
-	if err != nil {
-		return nil, err
-	}
+	userID := input.UserID
 
 	//TODO check if the linked object even exists
 	graph.Put1(w, newID, "Todo:User", userID)
 	graph.PutN(w, userID, "User:Todos", newID)
 
-	err = w.Commit(ctx)
+	err := w.Commit(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -45,39 +41,35 @@ func (r *mutationResolver) CreateTodo(ctx context.Context, input model.NewTodo) 
 }
 
 // DeleteTodo is the resolver for the deleteTodo field.
-func (r *mutationResolver) DeleteTodo(ctx context.Context, id string) (*model.Todo, error) {
-	pid, err := uuid.Parse(id)
-	if err != nil {
-		return nil, err
-	}
+func (r *mutationResolver) DeleteTodo(ctx context.Context, id uuid.UUID) (*model.Todo, error) {
 
 	kw := r.KV.Write()
 
 	var vv = &model.Todo{}
-	err = r.resolveModel(ctx, kw, pid, vv, nil)
+	err := r.resolveModel(ctx, kw, id, vv, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	err = auto.Del(ctx, kw, pid, "Todo:ID")
+	err = auto.Del(ctx, kw, id, "Todo:ID")
 	if err != nil {
 		return nil, err
 	}
 
-	err = auto.Del(ctx, kw, pid, "Todo:Text")
+	err = auto.Del(ctx, kw, id, "Todo:Text")
 	if err != nil {
 		return nil, err
 	}
 
-	userId, err := graph.Get1(kw, ctx, pid, "Todos:User")
+	userId, err := graph.Get1(kw, ctx, id, "Todos:User")
 	if err == nil {
-		err = graph.DelN(kw, userId, "User:Todos", pid)
+		err = graph.DelN(kw, userId, "User:Todos", id)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	err = graph.Del1(kw, pid, "Todo:User")
+	err = graph.Del1(kw, id, "Todo:User")
 	if err != nil {
 		return nil, err
 	}
@@ -111,40 +103,35 @@ func (r *mutationResolver) CreateUser(ctx context.Context, name string) (*model.
 }
 
 // DeleteUser is the resolver for the deleteUser field.
-func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (*model.User, error) {
-	pid, err := uuid.Parse(id)
-	if err != nil {
-		return nil, err
-	}
-
+func (r *mutationResolver) DeleteUser(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	kw := r.KV.Write()
 
 	var vv = &model.User{}
-	err = r.resolveModel(ctx, kw, pid, vv, nil)
+	err := r.resolveModel(ctx, kw, id, vv, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	//deleting a user will delete all of their todos
 
-	for id, err := range graph.GetN(kw, ctx, pid, "User:Todos") {
+	for id, err := range graph.GetN(kw, ctx, id, "User:Todos") {
 		if err != nil {
 			return nil, err
 		}
 
 		// this should have been in the same tx
-		_, err := r.DeleteTodo(ctx, id.String())
+		_, err := r.DeleteTodo(ctx, id)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	err = auto.Del(ctx, kw, pid, "User:ID")
+	err = auto.Del(ctx, kw, id, "User:ID")
 	if err != nil {
 		return nil, err
 	}
 
-	err = auto.Del(ctx, kw, pid, "User:Name")
+	err = auto.Del(ctx, kw, id, "User:Name")
 	if err != nil {
 		return nil, err
 	}

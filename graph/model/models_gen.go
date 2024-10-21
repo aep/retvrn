@@ -2,28 +2,32 @@
 
 package model
 
+import (
+	"github.com/google/uuid"
+)
+
 type Mutation struct {
 }
 
 type NewTodo struct {
-	Text   string `json:"text"`
-	UserID string `json:"userId"`
+	Text   string    `json:"text"`
+	UserID uuid.UUID `json:"userId"`
 }
 
 type Query struct {
 }
 
 type Todo struct {
-	ID          string `json:"id"`
-	Text        string `json:"text"`
-	Done        bool   `json:"done"`
-	User        *User  `json:"user"`
-	SomeCasing  bool   `json:"Some_casing"`
-	OtherCasing bool   `json:"otherCasing"`
+	ID          uuid.UUID `json:"id"`
+	Text        string    `json:"text"`
+	Done        bool      `json:"done"`
+	User        *User     `json:"user"`
+	SomeCasing  bool      `json:"Some_casing"`
+	OtherCasing bool      `json:"otherCasing"`
 }
 
 type User struct {
-	ID    string  `json:"id"`
-	Name  string  `json:"name"`
-	Todos []*Todo `json:"todos,omitempty"`
+	ID    uuid.UUID `json:"id"`
+	Name  string    `json:"name"`
+	Todos []*Todo   `json:"todos,omitempty"`
 }
