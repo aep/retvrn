@@ -22,30 +22,36 @@ func Serialize(v interface{}) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func Deserialize(b []byte, v interface{}) error {
+func Deserialize(b []byte, vi interface{}) (interface{}, error) {
 
 	// nil value or error?
 	if len(b) < 2 {
-		return nil
+		return nil, nil
 	}
 
-	t := reflect.TypeOf(v)
-	if t.Kind() != reflect.Ptr {
-		return fmt.Errorf("unsupported type %s . should be pointer", t)
-	}
+	t := reflect.TypeOf(vi)
+	v := reflect.ValueOf(vi)
 
-	t = t.Elem()
-	switch t.Kind() {
-	case reflect.String:
-		switch string(b[0:2]) {
-		case "0s":
-			reflect.ValueOf(v).Elem().SetString(string(b[2:]))
-		default:
-			return fmt.Errorf("cannot read value of type '%s' as %s", string(b[0:2]), t)
+	switch string(b[0:2]) {
+	case "0s":
+		if vi == nil {
+			return string(b[2:]), nil
 		}
-	default:
-		return fmt.Errorf("unsupported type %s", t)
-	}
+		if t.Kind() == reflect.Ptr {
+			t = t.Elem()
+			if v.IsNil() {
+				v.Set(reflect.New(t))
+			}
+			v = v.Elem()
+		}
+		if t.Kind() == reflect.String {
+			v.SetString(string(b[2:]))
+			return vi, nil
+		} else {
+			return nil, fmt.Errorf("cannot read value of type '%s' as %s", string(b[0:2]), t)
+		}
 
-	return nil
+	default:
+		return nil, fmt.Errorf("cannot read value of type '%s' as %s", string(b[0:2]), t)
+	}
 }

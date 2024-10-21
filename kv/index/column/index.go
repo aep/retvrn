@@ -8,7 +8,6 @@ import (
 	"retvrn/kv/index"
 )
 
-// Set a value by key and id
 func Set(w kv.Write, id uuid.UUID, key string, value interface{}) error {
 
 	if err := checkValidKey(key); err != nil {
@@ -27,8 +26,23 @@ func Set(w kv.Write, id uuid.UUID, key string, value interface{}) error {
 	return nil
 }
 
-// Get a value by key and id.
-func Get(r kv.Read, ctx context.Context, id uuid.UUID, key string, value interface{}) error {
+func Get(r kv.Read, ctx context.Context, id uuid.UUID, key string, value interface{}) (interface{}, error) {
+
+	if err := checkValidKey(key); err != nil {
+		return nil, err
+	}
+
+	k := []byte(fmt.Sprintf("f.%s.%s", key, id))
+
+	v, err := r.Get(ctx, k)
+	if err != nil {
+		return nil, err
+	}
+
+	return index.Deserialize(v, value)
+}
+
+func Del(w kv.Write, id uuid.UUID, key string) error {
 
 	if err := checkValidKey(key); err != nil {
 		return err
@@ -36,12 +50,9 @@ func Get(r kv.Read, ctx context.Context, id uuid.UUID, key string, value interfa
 
 	k := []byte(fmt.Sprintf("f.%s.%s", key, id))
 
-	v, err := r.Get(ctx, k)
-	if err != nil {
-		return err
-	}
+	w.Del(k)
 
-	return index.Deserialize(v, value)
+	return nil
 }
 
 func checkValidKey(key string) error {

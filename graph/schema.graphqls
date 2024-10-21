@@ -12,21 +12,26 @@ type Todo {
 }
 
 type User {
-  id: ID!
-  name: String!
+  	id: ID!
+  	name: String!
+	todos: [Todo!]
 }
 
 type Query {
-todos(text: String): [Todo!]!
+	todos(text: String): [Todo!]!
+	users: [User!]!
 }
 
 input NewTodo {
-  text: String!
-  userId: String!
+  	text: String!
+  	userId: ID!
 }
 
 type Mutation {
-  createTodo(input: NewTodo!): Todo!
+  	createTodo(input: NewTodo!): Todo!
+	deleteTodo(id: ID!): Todo!
+	createUser(name: String!): User!
+	deleteUser(id: ID!): User!
 }
 
 

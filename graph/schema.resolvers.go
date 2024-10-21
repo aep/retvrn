@@ -6,12 +6,13 @@ package graph
 
 import (
 	"context"
+	"iter"
 	"retvrn/graph/model"
-	"retvrn/kv/index/column"
+	"retvrn/kv/index/auto"
+	"retvrn/kv/index/graph"
 	"retvrn/kv/index/search"
 
 	"github.com/google/uuid"
-	"iter"
 )
 
 // CreateTodo is the resolver for the createTodo field.
@@ -20,11 +21,83 @@ func (r *mutationResolver) CreateTodo(ctx context.Context, input model.NewTodo) 
 
 	newID := uuid.New()
 
-	column.Set(w, newID, "Todo:ID", newID.String())
-	search.Set(w, newID, "Todo:ID", newID.String())
+	auto.Set(w, newID, "Todo:ID", newID.String())
+	auto.Set(w, newID, "Todo:Text", input.Text)
 
-	column.Set(w, newID, "Todo:Text", input.Text)
-	search.Set(w, newID, "Todo:Text", input.Text)
+	userID, err := uuid.Parse(input.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	//TODO check if the linked object even exists
+	graph.Set1(w, newID, "Todo:User", userID)
+	graph.SetN(w, userID, "User:Todos", newID)
+
+	err = w.Commit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	kr := r.KV.Read()
+
+	rr := &model.Todo{}
+	return rr, r.resolveModel(ctx, kr, newID, rr, nil)
+}
+
+// DeleteTodo is the resolver for the deleteTodo field.
+func (r *mutationResolver) DeleteTodo(ctx context.Context, id string) (*model.Todo, error) {
+	pid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, err
+	}
+
+	kw := r.KV.Write()
+
+	var vv = &model.Todo{}
+	err = r.resolveModel(ctx, kw, pid, vv, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	err = auto.Del(ctx, kw, pid, "Todo:ID")
+	if err != nil {
+		return nil, err
+	}
+
+	err = auto.Del(ctx, kw, pid, "Todo:Text")
+	if err != nil {
+		return nil, err
+	}
+
+	userId, err := graph.Get1(kw, ctx, pid, "Todos:User")
+	if err == nil {
+		err = graph.DelN(kw, userId, "User:Todos", pid)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = graph.Del1(kw, pid, "Todo:User")
+	if err != nil {
+		return nil, err
+	}
+
+	err = kw.Commit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return vv, nil
+}
+
+// CreateUser is the resolver for the createUser field.
+func (r *mutationResolver) CreateUser(ctx context.Context, name string) (*model.User, error) {
+	w := r.KV.Write()
+
+	newID := uuid.New()
+
+	auto.Set(w, newID, "User:ID", newID.String())
+	auto.Set(w, newID, "User:Name", name)
 
 	err := w.Commit(ctx)
 	if err != nil {
@@ -33,8 +106,51 @@ func (r *mutationResolver) CreateTodo(ctx context.Context, input model.NewTodo) 
 
 	kr := r.KV.Read()
 
-	rr := &model.Todo{}
-	return rr, r.resolveModel(ctx, kr, newID, rr)
+	rr := &model.User{}
+	return rr, r.resolveModel(ctx, kr, newID, rr, nil)
+}
+
+// DeleteUser is the resolver for the deleteUser field.
+func (r *mutationResolver) DeleteUser(ctx context.Context, id string) (*model.User, error) {
+	pid, err := uuid.Parse(id)
+	if err != nil {
+		return nil, err
+	}
+
+	kw := r.KV.Write()
+
+	var vv = &model.User{}
+	err = r.resolveModel(ctx, kw, pid, vv, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	//deleting a user will delete all of their todos
+
+	for id, err := range graph.GetN(kw, ctx, pid, "User:Todos") {
+		if err != nil {
+			return nil, err
+		}
+
+		// this should have been in the same tx
+		_, err := r.DeleteTodo(ctx, id.String())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	err = auto.Del(ctx, kw, pid, "User:ID")
+	if err != nil {
+		return nil, err
+	}
+
+	err = auto.Del(ctx, kw, pid, "User:Name")
+	if err != nil {
+		return nil, err
+	}
+
+	err = kw.Commit(ctx)
+	return vv, err
 }
 
 // Todos is the resolver for the todos field.
@@ -56,7 +172,33 @@ func (r *queryResolver) Todos(ctx context.Context, text *string) ([]*model.Todo,
 		}
 
 		rrr := &model.Todo{}
-		err := r.resolveModel(ctx, kr, i, rrr)
+		err := r.resolveModel(ctx, kr, i, rrr, nil)
+		if err != nil {
+			return nil, err
+		}
+		rr = append(rr, rrr)
+
+	}
+
+	return rr, nil
+}
+
+// Users is the resolver for the users field.
+func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
+	kr := r.KV.Read()
+
+	var rr = []*model.User{}
+
+	var it iter.Seq2[uuid.UUID, error]
+	it = search.Get(kr, ctx, "User:ID")
+
+	for i, err := range it {
+		if err != nil {
+			return nil, err
+		}
+
+		rrr := &model.User{}
+		err := r.resolveModel(ctx, kr, i, rrr, nil)
 		if err != nil {
 			return nil, err
 		}

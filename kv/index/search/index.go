@@ -76,6 +76,28 @@ func Set(w kv.Write, id uuid.UUID, key string, value interface{}) error {
 
 }
 
+func Del(w kv.Write, id uuid.UUID, key string, value interface{}) error {
+	if err := checkValidKey(key); err != nil {
+		return err
+	}
+
+	terms, err := terms(value)
+	if err != nil {
+		return err
+	}
+
+	for _, term := range terms {
+		k := append([]byte(fmt.Sprintf("s.%s.", key)), term...)
+		k = append(k, 0)
+		k = append(k, '.')
+		k = append(k, []byte(id.String())...)
+		w.Del(k)
+	}
+
+	return nil
+
+}
+
 func Get(r kv.Read, ctx context.Context, key string, value ...interface{}) iter.Seq2[uuid.UUID, error] {
 
 	if err := checkValidKey(key); err != nil {

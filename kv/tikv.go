@@ -49,6 +49,42 @@ func (w *TikvWrite) Get(ctx context.Context, key []byte) ([]byte, error) {
 	return w.txn.Get(ctx, key)
 }
 
+func (w *TikvWrite) Del(key []byte) error {
+	if w.err != nil {
+		return w.err
+	}
+	return w.txn.Delete(key)
+}
+
+func (r *TikvWrite) Iter(ctx context.Context, start []byte, end []byte) iter.Seq2[KeyAndValue, error] {
+
+	return func(yield func(KeyAndValue, error) bool) {
+
+		it, err := r.txn.Iter(start, end)
+		if err != nil {
+			yield(KeyAndValue{}, err)
+			return
+		}
+
+		for it.Valid() {
+
+			if !yield(KeyAndValue{K: it.Key(), V: it.Value()}, nil) {
+				return
+			}
+
+			err := it.Next()
+			if err != nil {
+				if !yield(KeyAndValue{}, err) {
+					return
+				}
+			}
+		}
+	}
+}
+
+func (r *TikvWrite) Close() {
+}
+
 type TikvRead struct {
 	txn *txnsnapshot.KVSnapshot
 	err error

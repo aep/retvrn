@@ -11,17 +11,29 @@ import (
 	"reflect"
 	"retvrn/kv"
 	"retvrn/kv/index/column"
+	"retvrn/kv/index/graph"
+	"strings"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/ettle/strcase"
-	// "github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 type Resolver struct {
 	KV kv.KV
 }
 
-func (r *Resolver) resolveModel(ctx context.Context, kvr kv.Read, id uuid.UUID, to interface{}) error {
+type recursion struct {
+	fields ast.SelectionSet
+	debug  string
+}
+
+func (r *Resolver) resolveModel(ctx context.Context, kvr kv.Read, id uuid.UUID, to interface{}, rec *recursion) error {
+
+	debug := ""
+	if rec != nil {
+		debug = rec.debug
+	}
 
 	t := reflect.TypeOf(to)
 	if t.Kind() != reflect.Ptr || t.Elem().Kind() != reflect.Struct {
@@ -32,7 +44,14 @@ func (r *Resolver) resolveModel(ctx context.Context, kvr kv.Read, id uuid.UUID, 
 
 	octx := graphql.GetOperationContext(ctx)
 
-	for _, field := range graphql.CollectFieldsCtx(ctx, nil) {
+	var fields []graphql.CollectedField
+	if rec == nil {
+		fields = graphql.CollectFieldsCtx(ctx, nil)
+	} else {
+		fields = graphql.CollectFields(octx, rec.fields, nil)
+	}
+
+	for _, field := range fields {
 
 		// FIXME: use the json tags instead to match, or the Position to get it from the graphql source definition
 		fn := strcase.ToPascal(field.Definition.Name)
@@ -46,16 +65,46 @@ func (r *Resolver) resolveModel(ctx context.Context, kvr kv.Read, id uuid.UUID, 
 			continue
 		}
 
-		if tt.Type.Kind() == reflect.Ptr {
+		if tt.Type.Kind() == reflect.Slice {
+			ttt := tt.Type.Elem()
+			if ttt.Kind() != reflect.Ptr {
+				return fmt.Errorf("[%s] slice of scalar not supported yet")
+			}
+			k := field.ObjectDefinition.Name + ":" + tt.Name
+
+			for id2, err := range graph.GetN(kvr, ctx, id, k) {
+				if err != nil {
+					return fmt.Errorf("[%s] cannot follow graph %s from %s id %s: %s", debug, field.ObjectDefinition.Name, tt.Name, id, err)
+				}
+				vv := reflect.New(ttt.Elem())
+				err = r.resolveModel(ctx, kvr, id2, vv.Interface(), &recursion{
+					fields: field.Selections,
+				})
+				if err != nil {
+					return fmt.Errorf("[%s] %w", debug, err)
+				}
+				v.FieldByName(tt.Name).Set(reflect.Append(v.FieldByName(tt.Name), vv))
+			}
+
+		} else if tt.Type.Kind() == reflect.Ptr {
 
 			// make a new type and assign to field
 
 			vv := reflect.New(tt.Type.Elem())
 			v.FieldByName(tt.Name).Set(vv)
 
-			// TODO recurse here
-			for _, field := range graphql.CollectFields(octx, field.Selections, nil) {
-				fmt.Println(field.Name)
+			k := field.ObjectDefinition.Name + ":" + tt.Name
+
+			id2, err := graph.Get1(kvr, ctx, id, k)
+			if err != nil {
+				return fmt.Errorf("[%s] cannot follow graph %s from %s id %s: %s", debug, field.ObjectDefinition.Name, tt.Name, id, err)
+			}
+
+			err = r.resolveModel(ctx, kvr, id2, vv.Interface(), &recursion{
+				fields: field.Selections,
+			})
+			if err != nil {
+				return fmt.Errorf("[%s] %w", debug, err)
 			}
 
 		} else { // assume its a scalar
@@ -64,9 +113,11 @@ func (r *Resolver) resolveModel(ctx context.Context, kvr kv.Read, id uuid.UUID, 
 
 			v := v.FieldByName(tt.Name).Addr().Interface()
 			k := field.ObjectDefinition.Name + ":" + tt.Name
-			err := column.Get(kvr, ctx, id, k, v)
+			_, err := column.Get(kvr, ctx, id, k, v)
 			if err != nil {
-				return fmt.Errorf("cannot get %s.%s: %s", k, id, err)
+				if !strings.Contains(err.Error(), "not exist") {
+					return fmt.Errorf("[%s] cannot get %s.%s: %s", debug, k, id, err)
+				}
 			}
 		}
 
