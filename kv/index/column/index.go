@@ -8,7 +8,7 @@ import (
 	"retvrn/kv/index"
 )
 
-func Set(w kv.Write, id uuid.UUID, key string, value interface{}) error {
+func Put(w kv.Write, id uuid.UUID, key string, value interface{}) error {
 
 	if err := checkValidKey(key); err != nil {
 		return err
@@ -21,7 +21,7 @@ func Set(w kv.Write, id uuid.UUID, key string, value interface{}) error {
 		return err
 	}
 
-	w.Set(k, v)
+	w.Put(k, v)
 
 	return nil
 }

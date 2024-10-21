@@ -8,12 +8,12 @@ import (
 	"retvrn/kv/index/search"
 )
 
-func Set(w kv.Write, id uuid.UUID, key string, value interface{}) error {
-	err := column.Set(w, id, key, value)
+func Put(w kv.Write, id uuid.UUID, key string, value interface{}) error {
+	err := column.Put(w, id, key, value)
 	if err != nil {
 		return err
 	}
-	err = search.Set(w, id, key, value)
+	err = search.Put(w, id, key, value)
 	if err != nil {
 		return err
 	}

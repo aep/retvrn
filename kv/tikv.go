@@ -30,7 +30,7 @@ func (w *TikvWrite) Rollback() error {
 	return w.txn.Rollback()
 }
 
-func (w *TikvWrite) Set(key []byte, value []byte) error {
+func (w *TikvWrite) Put(key []byte, value []byte) error {
 	if w.err != nil {
 		return w.err
 	}

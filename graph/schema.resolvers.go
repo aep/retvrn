@@ -21,8 +21,8 @@ func (r *mutationResolver) CreateTodo(ctx context.Context, input model.NewTodo) 
 
 	newID := uuid.New()
 
-	auto.Set(w, newID, "Todo:ID", newID.String())
-	auto.Set(w, newID, "Todo:Text", input.Text)
+	auto.Put(w, newID, "Todo:ID", newID.String())
+	auto.Put(w, newID, "Todo:Text", input.Text)
 
 	userID, err := uuid.Parse(input.UserID)
 	if err != nil {
@@ -30,8 +30,8 @@ func (r *mutationResolver) CreateTodo(ctx context.Context, input model.NewTodo) 
 	}
 
 	//TODO check if the linked object even exists
-	graph.Set1(w, newID, "Todo:User", userID)
-	graph.SetN(w, userID, "User:Todos", newID)
+	graph.Put1(w, newID, "Todo:User", userID)
+	graph.PutN(w, userID, "User:Todos", newID)
 
 	err = w.Commit(ctx)
 	if err != nil {
@@ -96,8 +96,8 @@ func (r *mutationResolver) CreateUser(ctx context.Context, name string) (*model.
 
 	newID := uuid.New()
 
-	auto.Set(w, newID, "User:ID", newID.String())
-	auto.Set(w, newID, "User:Name", name)
+	auto.Put(w, newID, "User:ID", newID.String())
+	auto.Put(w, newID, "User:Name", name)
 
 	err := w.Commit(ctx)
 	if err != nil {

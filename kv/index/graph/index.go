@@ -65,24 +65,24 @@ func Get1(r kv.Read, ctx context.Context, id uuid.UUID, key string) (uuid.UUID, 
 
 }
 
-func SetN(w kv.Write, from uuid.UUID, key string, to uuid.UUID) error {
+func PutN(w kv.Write, from uuid.UUID, key string, to uuid.UUID) error {
 	if err := checkValidKey(key); err != nil {
 		return err
 	}
 
 	k := []byte(fmt.Sprintf("s.%s.%s.%s", key, from, to))
 
-	return w.Set(k, []byte{0})
+	return w.Put(k, []byte{0})
 }
 
-func Set1(w kv.Write, from uuid.UUID, key string, to uuid.UUID) error {
+func Put1(w kv.Write, from uuid.UUID, key string, to uuid.UUID) error {
 	if err := checkValidKey(key); err != nil {
 		return err
 	}
 
 	k := []byte(fmt.Sprintf("s.%s.%s.unique", key, from))
 
-	return w.Set(k, []byte(to.String()))
+	return w.Put(k, []byte(to.String()))
 }
 
 func Del1(w kv.Write, from uuid.UUID, key string) error {

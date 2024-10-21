@@ -54,7 +54,7 @@ func terms(value interface{}) ([][]byte, error) {
 	return terms, nil
 }
 
-func Set(w kv.Write, id uuid.UUID, key string, value interface{}) error {
+func Put(w kv.Write, id uuid.UUID, key string, value interface{}) error {
 	if err := checkValidKey(key); err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func Set(w kv.Write, id uuid.UUID, key string, value interface{}) error {
 		k = append(k, 0)
 		k = append(k, '.')
 		k = append(k, []byte(id.String())...)
-		w.Set(k, []byte{0})
+		w.Put(k, []byte{0})
 	}
 
 	return nil

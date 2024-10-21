@@ -25,7 +25,7 @@ type Read interface {
 type Write interface {
 	Read
 	Get(ctx context.Context, key []byte) ([]byte, error)
-	Set(key []byte, value []byte) error
+	Put(key []byte, value []byte) error
 	Del(key []byte) error
 	Commit(ctx context.Context) error
 	Rollback() error
